@@ -1,14 +1,19 @@
 import { useState } from 'react';
+import type { Editor } from '@tiptap/react';
 import { IconDoc, IconStar } from './DocsIcons.js';
-
-const MENU_ITEMS = ['File', 'Edit', 'View', 'Insert', 'Format', 'Tools', 'Extensions', 'Help'] as const;
+import { DocsMenuBar } from './DocsMenuBar.js';
 
 export interface DocsTitleBarProps {
   readonly title: string;
   readonly saveState: 'saved' | 'saving' | 'dirty' | 'error';
+  readonly editor: Editor | null;
   readonly onTitleChange: (title: string) => void;
   readonly onExportDocx: () => void;
   readonly onExportPdf: () => void;
+  readonly onNewDocument: () => void;
+  readonly onOpenOdt: () => void;
+  readonly onInsertImage: () => void;
+  readonly onOpenFind: () => void;
 }
 
 function saveLabel(state: DocsTitleBarProps['saveState']): string {
@@ -27,9 +32,14 @@ function saveLabel(state: DocsTitleBarProps['saveState']): string {
 export function DocsTitleBar({
   title,
   saveState,
+  editor,
   onTitleChange,
   onExportDocx,
   onExportPdf,
+  onNewDocument,
+  onOpenOdt,
+  onInsertImage,
+  onOpenFind,
 }: DocsTitleBarProps) {
   const [starred, setStarred] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -86,13 +96,15 @@ export function DocsTitleBar({
           </div>
         </div>
       </div>
-      <nav className="docs-menubar" aria-label="Document menu">
-        {MENU_ITEMS.map((item) => (
-          <button key={item} type="button" className="docs-menubar__item">
-            {item}
-          </button>
-        ))}
-      </nav>
+      <DocsMenuBar
+        editor={editor}
+        onNewDocument={onNewDocument}
+        onOpenOdt={onOpenOdt}
+        onInsertImage={onInsertImage}
+        onOpenFind={onOpenFind}
+        onExportDocx={onExportDocx}
+        onExportPdf={onExportPdf}
+      />
     </header>
   );
 }

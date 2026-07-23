@@ -20,7 +20,7 @@ export async function tiptapToPdfBuffer(
   resolveImage: ImageResolver,
   executablePath: string,
 ): Promise<Buffer> {
-  const html = tiptapToHtml(doc, resolveImage);
+  const html = tiptapToHtml(doc, resolveImage, { includeDocumentTitle: false });
   const browser = await getBrowser(executablePath);
   const page = await browser.newPage();
   try {

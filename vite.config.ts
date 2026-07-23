@@ -3,8 +3,10 @@ import { defineConfig } from 'vite';
 import { fileURLToPath, URL } from 'node:url';
 
 const apiTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3002';
+const appBase = '/docs/';
 
 export default defineConfig({
+  base: appBase,
   plugins: [react()],
   resolve: {
     alias: {
@@ -19,9 +21,21 @@ export default defineConfig({
   server: {
     port: 5175,
     proxy: {
-      '/api': { target: apiTarget, changeOrigin: true },
-      '/health': { target: apiTarget, changeOrigin: true },
-      '/version': { target: apiTarget, changeOrigin: true },
+      [`${appBase}api`]: {
+        target: apiTarget,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/docs/, ''),
+      },
+      [`${appBase}health`]: {
+        target: apiTarget,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/docs/, ''),
+      },
+      [`${appBase}version`]: {
+        target: apiTarget,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/docs/, ''),
+      },
     },
   },
 });

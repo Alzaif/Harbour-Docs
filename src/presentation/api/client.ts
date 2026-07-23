@@ -1,7 +1,8 @@
 import type { Document, DocumentSummary } from './types.js';
+import { apiUrl } from './app-path.js';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path), {
     ...init,
     credentials: 'same-origin',
     headers: {
@@ -51,7 +52,7 @@ export const api = {
   async uploadImage(documentId: string, file: File): Promise<string> {
     const form = new FormData();
     form.append('file', file);
-    const res = await fetch(`/api/documents/${documentId}/attachments`, {
+    const res = await fetch(apiUrl(`/api/documents/${documentId}/attachments`), {
       method: 'POST',
       body: form,
       credentials: 'same-origin',
@@ -65,10 +66,25 @@ export const api = {
   },
 
   exportDocx(documentId: string): void {
-    window.location.assign(`/api/documents/${documentId}/export/docx`);
+    window.location.assign(apiUrl(`/api/documents/${documentId}/export/docx`));
   },
 
   exportPdf(documentId: string): void {
-    window.location.assign(`/api/documents/${documentId}/export/pdf`);
+    window.location.assign(apiUrl(`/api/documents/${documentId}/export/pdf`));
+  },
+
+  async importOdt(file: File): Promise<Document> {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(apiUrl('/api/documents/import/odt'), {
+      method: 'POST',
+      body: form,
+      credentials: 'same-origin',
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? 'Import failed');
+    }
+    return res.json() as Promise<Document>;
   },
 };

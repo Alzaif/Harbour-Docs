@@ -1,21 +1,27 @@
 import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
-import TextAlign from '@tiptap/extension-text-align';
-import { TextStyle } from '@tiptap/extension-text-style';
-import FontFamily from '@tiptap/extension-font-family';
-import Link from '@tiptap/extension-link';
+import CharacterCount from '@tiptap/extension-character-count';
+import Placeholder from '@tiptap/extension-placeholder';
 import type { Editor } from '@tiptap/react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createDocsTipTapExtensions } from '../../shared/tiptap-extensions.js';
 import { CustomImage } from '../extensions/custom-image.js';
 import { FontSize } from '../extensions/font-size.js';
+import { LineHeight } from '../extensions/line-height.js';
 import { DocsToolbar } from './DocsToolbar.js';
+import { FindReplacePanel } from './FindReplacePanel.js';
+
+export interface DocsEditorActions {
+  insertImage: () => void;
+  openFind: () => void;
+}
 
 interface RichTextEditorProps {
   contentJson: string;
   onChange: (json: string) => void;
   onImageUpload: (file: File) => Promise<string>;
   editable?: boolean;
+  onEditorReady?: (editor: Editor | null) => void;
+  actionsRef?: React.MutableRefObject<DocsEditorActions | null>;
 }
 
 const QUICK_STARTERS = [
@@ -49,23 +55,35 @@ export function RichTextEditor({
   onChange,
   onImageUpload,
   editable = true,
+  onEditorReady,
+  actionsRef,
 }: RichTextEditorProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const suppressUpdate = useRef(true);
+  const [findOpen, setFindOpen] = useState(false);
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ link: false }),
-      Link.configure({ openOnClick: false }),
-      Underline,
-      TextStyle,
-      FontFamily,
+      ...createDocsTipTapExtensions({
+        image: CustomImage.configure({ inline: false, allowBase64: false }),
+      }),
       FontSize,
-      TextAlign.configure({ types: ['heading', 'paragraph', 'image'] }),
-      CustomImage.configure({ inline: false, allowBase64: false }),
+      LineHeight,
+      CharacterCount,
+      Placeholder.configure({ placeholder: 'Type here, or pick a template to get started…' }),
     ],
     content: JSON.parse(contentJson),
     editable,
+    editorProps: {
+      handleKeyDown: (_view, event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
+          event.preventDefault();
+          setFindOpen(true);
+          return true;
+        }
+        return false;
+      },
+    },
     onUpdate: ({ editor: ed }) => {
       if (suppressUpdate.current) return;
       onChange(JSON.stringify(ed.getJSON()));
@@ -83,6 +101,27 @@ export function RichTextEditor({
       suppressUpdate.current = false;
     });
   }, [contentJson, editor]);
+
+  useEffect(() => {
+    if (editor) onEditorReady?.(editor);
+  }, [editor, onEditorReady]);
+
+  useEffect(() => {
+    return () => {
+      onEditorReady?.(null);
+    };
+  }, [onEditorReady]);
+
+  useEffect(() => {
+    if (!actionsRef) return;
+    actionsRef.current = {
+      insertImage: () => fileRef.current?.click(),
+      openFind: () => setFindOpen(true),
+    };
+    return () => {
+      actionsRef.current = null;
+    };
+  }, [actionsRef]);
 
   const handleImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -126,12 +165,23 @@ export function RichTextEditor({
   if (!editor) return null;
 
   const showQuickPills = editable && isEmptyDoc(editor);
+  const words = editor.storage.characterCount?.words?.() ?? 0;
+  const characters = editor.storage.characterCount?.characters?.() ?? 0;
 
   return (
     <div className="gdocs-editor">
-      {editable ? <DocsToolbar editor={editor} onInsertImage={() => fileRef.current?.click()} /> : null}
+      {editable ? (
+        <DocsToolbar
+          editor={editor}
+          onInsertImage={() => fileRef.current?.click()}
+          onOpenFind={() => setFindOpen(true)}
+        />
+      ) : null}
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleImagePick} />
       <div className="gdocs-canvas-scroll">
+        {findOpen && editable ? (
+          <FindReplacePanel editor={editor} onClose={() => setFindOpen(false)} />
+        ) : null}
         <div className="gdocs-canvas">
           <div className="gdocs-ruler" aria-hidden>
             {Array.from({ length: 17 }, (_, i) => (
@@ -162,6 +212,13 @@ export function RichTextEditor({
           </div>
         </div>
       </div>
+      {editable ? (
+        <div className="gdocs-statusbar" aria-live="polite">
+          <span>{words} {words === 1 ? 'word' : 'words'}</span>
+          <span className="gdocs-statusbar__sep">·</span>
+          <span>{characters} characters</span>
+        </div>
+      ) : null}
     </div>
   );
 }

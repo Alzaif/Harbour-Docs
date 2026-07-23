@@ -15,7 +15,7 @@ RUN npm run build
 FROM node:22-alpine AS runtime
 WORKDIR /app
 
-RUN apk add --no-cache nginx chromium nss freetype harfbuzz ca-certificates ttf-freefont
+RUN apk add --no-cache nginx chromium nss freetype harfbuzz ca-certificates ttf-freefont pandoc
 
 ENV NODE_ENV=production
 ENV PORT=3000

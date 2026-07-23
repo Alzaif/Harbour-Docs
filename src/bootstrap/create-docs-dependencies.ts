@@ -7,6 +7,11 @@ import { createDatabase } from '../infrastructure/persistence/create-database.js
 import { SqliteUserRepository } from '../infrastructure/persistence/sqlite-user-repository.js';
 import { SqliteDocumentRepository } from '../infrastructure/persistence/sqlite-document-repository.js';
 import { LocalFilesystemAttachmentStore } from '../infrastructure/storage/local-filesystem-attachment-store.js';
+import { PandocOdtConverter } from '../infrastructure/conversion/pandoc-odt-converter.js';
+import {
+  CompositeOdtConverter,
+  OdfNativeOdtConverter,
+} from '../infrastructure/conversion/odf-native-odt-converter.js';
 
 export interface DocsDependencies {
   config: DocsConfig;
@@ -26,7 +31,9 @@ export async function createDocsDependencies(
   const users = new SqliteUserRepository(db, clock);
   const documentRepo = new SqliteDocumentRepository(db, clock);
   const attachments = new LocalFilesystemAttachmentStore(db, clock, config.DATA_DIR);
-  const documents = new DocumentsService({ documents: documentRepo, attachments });
+  const pandoc = new PandocOdtConverter({ pandocPath: config.PANDOC_PATH });
+  const converter = new CompositeOdtConverter(new OdfNativeOdtConverter(), pandoc);
+  const documents = new DocumentsService({ documents: documentRepo, attachments, converter });
 
   return { config, users, documents };
 }

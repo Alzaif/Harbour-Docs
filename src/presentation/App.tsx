@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Editor } from '@tiptap/react';
 import { api } from './api/client.js';
 import type { Document, DocumentSummary } from './api/types.js';
 import { HarbourAppBar } from './components/HarbourAppBar.js';
 import { DocumentLibrary } from './components/DocumentLibrary.js';
 import { DocsTitleBar } from './components/DocsTitleBar.js';
-import { RichTextEditor } from './components/RichTextEditor.js';
+import { RichTextEditor, type DocsEditorActions } from './components/RichTextEditor.js';
 import { contentJsonEquals } from '../shared/normalize-content-json.js';
 
 const shellUrl = import.meta.env.VITE_HARBOUR_SHELL_URL?.trim() || window.location.origin;
@@ -18,6 +19,9 @@ export function App() {
   const [docLoading, setDocLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<'saved' | 'saving' | 'dirty' | 'error'>('saved');
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const editorActions = useRef<DocsEditorActions | null>(null);
+  const odtInputRef = useRef<HTMLInputElement>(null);
 
   const titleRef = useRef('');
   const contentRef = useRef('');
@@ -106,6 +110,7 @@ export function App() {
 
   const handleSelect = async (id: string) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
+    setEditor(null);
     await flushSave();
     setSelectedId(id);
   };
@@ -117,6 +122,16 @@ export function App() {
       setSelectedId(doc.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create document');
+    }
+  };
+
+  const handleImportOdt = async (file: File) => {
+    try {
+      const doc = await api.importOdt(file);
+      await refreshList(searchQuery);
+      setSelectedId(doc.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to import ODT');
     }
   };
 
@@ -136,12 +151,24 @@ export function App() {
 
   return (
     <div className="docs-app">
+      <input
+        ref={odtInputRef}
+        type="file"
+        accept=".odt,application/vnd.oasis.opendocument.text"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleImportOdt(file);
+          e.target.value = '';
+        }}
+      />
       <HarbourAppBar homeUrl={shellUrl} appName="Docs" />
       <div className="docs-shell">
         {document ? (
           <DocsTitleBar
             title={document.title}
             saveState={saveState}
+            editor={editor}
             onTitleChange={(t) => {
               titleRef.current = t;
               setDocument({ ...document, title: t });
@@ -149,6 +176,10 @@ export function App() {
             }}
             onExportDocx={() => api.exportDocx(document.id)}
             onExportPdf={() => api.exportPdf(document.id)}
+            onNewDocument={() => void handleCreate()}
+            onOpenOdt={() => odtInputRef.current?.click()}
+            onInsertImage={() => editorActions.current?.insertImage()}
+            onOpenFind={() => editorActions.current?.openFind()}
           />
         ) : (
           <header className="docs-titlebar docs-titlebar--empty">
@@ -177,18 +208,24 @@ export function App() {
             onDelete={(id) => void handleDelete(id)}
           />
           <main className="docs-app__workspace">
-            {docLoading ? (
-              <p className="docs-app__loading">Loading document…</p>
-            ) : document ? (
-              <RichTextEditor
-                contentJson={document.contentJson}
-                onChange={(json) => {
-                  contentRef.current = json;
-                  setDocument({ ...document, contentJson: json });
-                  scheduleSave();
-                }}
-                onImageUpload={(file) => api.uploadImage(document.id, file)}
-              />
+            {document ? (
+              <div className="docs-app__editor-wrap">
+                {docLoading ? (
+                  <p className="docs-app__loading docs-app__loading--overlay">Loading document…</p>
+                ) : null}
+                <RichTextEditor
+                  key={document.id}
+                  contentJson={document.contentJson}
+                  onChange={(json) => {
+                    contentRef.current = json;
+                    setDocument({ ...document, contentJson: json });
+                    scheduleSave();
+                  }}
+                  onImageUpload={(file) => api.uploadImage(document.id, file)}
+                  onEditorReady={setEditor}
+                  actionsRef={editorActions}
+                />
+              </div>
             ) : (
               <div className="docs-app__welcome">
                 <p>Create a document with the <strong>+</strong> button in Document tabs.</p>

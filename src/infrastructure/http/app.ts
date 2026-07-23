@@ -33,6 +33,21 @@ export function createApp(deps: DocsDependencies) {
     return c.json(doc, 201);
   });
 
+  api.post('/documents/import/odt', async (c) => {
+    const form = await c.req.parseBody();
+    const file = form['file'];
+    if (!file || typeof file === 'string') {
+      throw new ValidationError('file is required');
+    }
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const doc = await deps.documents.importOdtDocument(c.get('user'), {
+      mimeType: file.type || 'application/octet-stream',
+      originalFilename: file.name || 'import.odt',
+      data: buffer,
+    }, { maxBytes: deps.config.IMPORT_MAX_BYTES });
+    return c.json(doc, 201);
+  });
+
   api.get('/documents/:id', async (c) => {
     const doc = await deps.documents.getDocument(c.get('user'), c.req.param('id'));
     return c.json(doc);

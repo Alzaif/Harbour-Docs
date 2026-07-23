@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DocumentsService } from '../../../src/application/documents-service.js';
+import type { DocumentConverterPort } from '../../../src/domain/ports/document-converter.port.js';
 import { SystemClock } from '../../../src/infrastructure/adapters/system-clock.js';
 import { createDatabase } from '../../../src/infrastructure/persistence/create-database.js';
 import { SqliteUserRepository } from '../../../src/infrastructure/persistence/sqlite-user-repository.js';
@@ -11,14 +12,20 @@ import { LocalFilesystemAttachmentStore } from '../../../src/infrastructure/stor
 import { EMPTY_DOC_JSON } from '../../../src/shared/extract-plain-text.js';
 import { ConflictError } from '../../../src/shared/errors.js';
 
-function createService() {
+function createService(converter?: DocumentConverterPort) {
   const dir = mkdtempSync(join(tmpdir(), 'docs-unit-'));
   const { db } = createDatabase(join(dir, 'test.db'));
   const clock = new SystemClock();
   const users = new SqliteUserRepository(db, clock);
   const documents = new SqliteDocumentRepository(db, clock);
   const attachments = new LocalFilesystemAttachmentStore(db, clock, dir);
-  const service = new DocumentsService({ documents, attachments });
+  const mockConverter: DocumentConverterPort = converter ?? {
+    convertOdtToHtml: async () => ({
+      html: '<html><body><p>Imported</p></body></html>',
+      mediaDir: join(dir, 'media'),
+    }),
+  };
+  const service = new DocumentsService({ documents, attachments, converter: mockConverter });
   return { service, users };
 }
 
@@ -66,5 +73,34 @@ describe('DocumentsService', () => {
     expect(filename).toMatch(/\.docx$/);
     expect(buffer[0]).toBe(0x50);
     expect(buffer[1]).toBe(0x4b);
+  });
+
+  it('imports ODT as a new document with title from filename', async () => {
+    const { service, users } = createService();
+    const user = await users.upsertFromGateway({ id: 'u4', email: 'u4@test' });
+    const doc = await service.importOdtDocument(
+      user,
+      {
+        originalFilename: 'My Import.odt',
+        mimeType: 'application/vnd.oasis.opendocument.text',
+        data: Buffer.from('fake-odt'),
+      },
+      { maxBytes: 1024 * 1024 },
+    );
+    expect(doc.title).toBe('My Import');
+    const parsed = JSON.parse(doc.contentJson) as { content: Array<{ type: string }> };
+    expect(parsed.content.some((n) => n.type === 'paragraph')).toBe(true);
+  });
+
+  it('rejects non-odt imports', async () => {
+    const { service, users } = createService();
+    const user = await users.upsertFromGateway({ id: 'u5', email: 'u5@test' });
+    await expect(
+      service.importOdtDocument(
+        user,
+        { originalFilename: 'x.docx', mimeType: 'application/msword', data: Buffer.from('x') },
+        { maxBytes: 1024 },
+      ),
+    ).rejects.toThrow(/Only .odt files are supported/);
   });
 });

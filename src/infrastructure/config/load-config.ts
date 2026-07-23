@@ -19,6 +19,8 @@ const configSchema = z.object({
     .default('true')
     .transform((v) => v === 'true'),
   CHROMIUM_EXECUTABLE_PATH: z.string().optional(),
+  PANDOC_PATH: z.string().default('pandoc'),
+  IMPORT_MAX_BYTES: z.coerce.number().default(20 * 1024 * 1024),
 });
 
 export type DocsConfig = z.infer<typeof configSchema>;
@@ -37,5 +39,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): DocsConfig {
     PACKAGE_VERSION: env.npm_package_version ?? env.PACKAGE_VERSION,
     EXPORT_PDF_ENABLED: env.EXPORT_PDF_ENABLED,
     CHROMIUM_EXECUTABLE_PATH: env.CHROMIUM_EXECUTABLE_PATH,
+    PANDOC_PATH: env.PANDOC_PATH,
+    IMPORT_MAX_BYTES: env.IMPORT_MAX_BYTES,
   });
 }
